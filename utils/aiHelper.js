@@ -6,6 +6,12 @@ const { extractMedia } = require('./mediaHelper');
 const { replaceMentionsWithTokens, resolveMentionTokens } = require('./textHelper');
 const { searchGif } = require('./giphySearch');
 
+// Inget subjek gambar terakhir yang dicari tiap user, biar pesan susulan
+// pendek ("mana fotonya wo", "kirim lagi") bisa nyari ulang tanpa perlu
+// user ngetik ulang subjeknya dari nol.
+const lastImageSubject = new Map();
+const IMAGE_SUBJECT_TTL = 10 * 60 * 1000; // 10 menit
+
 function getAzureConfig() {
   const endpoint = (process.env.AZURE_OPENAI_ENDPOINT || '').replace(/\/+$/, '');
   const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
@@ -94,7 +100,16 @@ module.exports = {
     }
 
     // 4b. PENCARIAN GIF/GAMBAR NYATA (kalau user minta foto/gambar sesuatu)
-    const imageQuery = contextHelper.detectImageRequest(content);
+    const stateKey = `${guildId}:${userId}`;
+    let imageQuery = contextHelper.detectImageRequest(content);
+    if (imageQuery) {
+      lastImageSubject.set(stateKey, { subject: imageQuery, ts: Date.now() });
+    } else if (contextHelper.isImageFollowup(content)) {
+      const cached = lastImageSubject.get(stateKey);
+      if (cached && Date.now() - cached.ts < IMAGE_SUBJECT_TTL) {
+        imageQuery = cached.subject;
+      }
+    }
     if (imageQuery) {
       const foundUrl = await searchGif(imageQuery);
       if (foundUrl) {
