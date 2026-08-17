@@ -67,11 +67,19 @@ function getUserFacts(guildId, userId) {
 
 function detectImageRequest(text) {
   const t = normalize(text);
-  const match = t.match(/(?:kirim(?:in)?|kasih|carikan|cariin|show|kirimkan)\s+(?:foto|gambar|pic|pict)\s+(.+)/i)
-    || t.match(/(?:foto|gambar|pic|pict)\s+(.+?)\s+(?:dong|dund|donk)?$/i);
+  const match = t.match(/(?:kirim(?:in)?|kasih|carikan|cariin|show|kirimkan)\s+(?:foto|fotonya|gambar|gambarnya|pic|pict)\s+(.+)/i)
+    || t.match(/(?:foto|fotonya|gambar|gambarnya|pic|pict)\s+(?:dari|nya)?\s*(.+?)\s+(?:dong|dund|donk)?$/i);
   if (!match) return null;
-  const query = match[1].replace(/\b(dong|dund|donk|wo|woy|ya|nya)\b/gi, "").trim();
+  const query = match[1].replace(/\b(dong|dund|donk|wo|woy|ya|nya|mana)\b/gi, "").trim();
   return query.length >= 2 ? query : null;
+}
+
+// Pesan susulan pendek yang minta gambar TANPA nyebut subjek baru
+// (mis. "mana fotonya wo", "kirim lagi", "gas", "fotonya mana")
+// dipakai buat reuse topik gambar terakhir yang lagi dibahas.
+function isImageFollowup(text) {
+  const t = normalize(text);
+  return /^(mana( foto(nya)?| gambar(nya)?)?|foto(nya)?( dong| mana)?|gambar(nya)?( dong| mana)?|kirim(in)?( dong| aja| lagi)*|gas( kirim)?( lagi)?|lagi( dong)?)\s*(wo|woy|dong|ya)?[!?.]*$/i.test(t);
 }
 
 module.exports = {
@@ -81,6 +89,7 @@ module.exports = {
   detectFlirtMode,
   getUserFacts,
   detectImageRequest,
+  isImageFollowup,
 
   buildPersonalityContext: (guildId, userId) => {
     const profile = getUserFacts(guildId, userId);
