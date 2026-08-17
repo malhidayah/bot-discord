@@ -44,6 +44,46 @@ function detectFlirtMode(text) {
   return 'playful';
 }
 
+// Kata aksi/ekspresi Indonesia -> query pencarian GIF (Inggris, hasil GIPHY jauh lebih banyak)
+const ACTION_GIF_MAP = [
+  { match: /\b(tampar|gampar|tabok|tempeleng)\b/i, query: 'anime slap' },
+  { match: /\b(peluk|pelukan|hug)\b/i, query: 'anime hug' },
+  { match: /\b(cium|kiss|cipok)\b/i, query: 'anime kiss' },
+  { match: /\b(pukul|hajar|gebuk|bogem|tinju)\b/i, query: 'anime punch' },
+  { match: /\b(dorong|push)\b/i, query: 'anime push' },
+  { match: /\b(lempar|lemparin|throw)\b/i, query: 'anime throw' },
+  { match: /\b(kesel|sebel|bete|annoyed)\b/i, query: 'annoyed anime' },
+  { match: /\b(marah|emosi|ngamuk|kesal banget)\b/i, query: 'angry anime' },
+  { match: /\b(sedih|nangis|mewek|crying)\b/i, query: 'sad crying anime' },
+  { match: /\b(seneng|senang|happy|gembira|bahagia)\b/i, query: 'happy dance anime' },
+  { match: /\b(ketawa|ngakak|laugh|wkwkwk+)\b/i, query: 'laughing anime' },
+  { match: /\b(malu|blushing|blush|salting)\b/i, query: 'shy blush anime' },
+  { match: /\b(kaget|shock|shocked|kejut)\b/i, query: 'shocked anime' },
+  { match: /\b(ngantuk|sleepy)\b/i, query: 'sleepy anime' },
+  { match: /\b(capek|lelah|cape|tired|exhausted)\b/i, query: 'tired anime' },
+  { match: /\b(nyerah|give up|menyerah)\b/i, query: 'give up anime' },
+  { match: /\b(bingung|confused)\b/i, query: 'confused anime' },
+  { match: /\b(takut|scared|serem)\b/i, query: 'scared anime' },
+  { match: /\b(bosen|bosan|bored)\b/i, query: 'bored anime' },
+  { match: /\b(lapar|hungry)\b/i, query: 'hungry anime' },
+  { match: /\b(nari|dance|joget)\b/i, query: 'anime dance' },
+  { match: /\b(tepuk tangan|clap|applause)\b/i, query: 'clap applause anime' },
+  { match: /\b(wink|kedip)\b/i, query: 'wink anime' },
+  { match: /\b(nunjuk|point)\b/i, query: 'pointing anime' },
+  { match: /\b(muntah|jijik|eww|disgust)\b/i, query: 'disgust anime' },
+];
+
+// Cuma trigger buat pesan pendek yang jelas maksudnya ekspresi/aksi ke bot,
+// bukan cerita panjang yang kebetulan nyebut salah satu kata itu.
+function detectActionRequest(text) {
+  const t = normalize(text);
+  if (t.split(' ').length > 8) return null;
+  for (const { match, query } of ACTION_GIF_MAP) {
+    if (match.test(t)) return query;
+  }
+  return null;
+}
+
 function getUserFacts(guildId, userId) {
   const profile = memoryHelper.getUserProfile(guildId, userId);
   return {
@@ -90,6 +130,7 @@ module.exports = {
   getUserFacts,
   detectImageRequest,
   isImageFollowup,
+  detectActionRequest,
 
   buildPersonalityContext: (guildId, userId) => {
     const profile = getUserFacts(guildId, userId);
