@@ -117,6 +117,15 @@ module.exports = {
       } else {
         context += `\n============================================================\nGAMBAR TIDAK DITEMUKAN\n============================================================\nUser minta foto/gambar "${imageQuery}" tapi pencarian tidak menemukan hasil. JANGAN mengarang URL gambar apapun. Bilang jujur nggak nemu, dengan gaya santai.\n`;
       }
+    } else {
+      // 4c. GIF AKSI/EKSPRESI (tampar, peluk, kesel, marah, ketawa, dll)
+      const actionQuery = contextHelper.detectActionRequest(content);
+      if (actionQuery) {
+        const foundUrl = await searchGif(actionQuery);
+        if (foundUrl) {
+          context += `\n============================================================\nGIF AKSI/EKSPRESI DITEMUKAN\n============================================================\nUser lagi mengekspresikan/minta aksi terkait "${actionQuery}". Hasil pencarian nyata: ${foundUrl}\nKalau memang pas dan natural, sertakan di akhir balasanmu pakai format [MEDIA:${foundUrl}]. Kalau targetnya jelas (ada yang di-mention), boleh sebut targetnya di teks balasan. JANGAN mengarang URL lain kalau nggak dipakai.\n`;
+        }
+      }
     }
 
     // 5. RELATIONSHIP / JODOH CONTEXT
