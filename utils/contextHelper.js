@@ -18,6 +18,7 @@ function extractMentionTargets(message) {
 function detectIntent(text) {
   const t = normalize(text);
   if (/godain|gombal|rayu|flirt|flirting|genit|modus|romantis|baper/.test(t)) return 'flirt';
+  if (/kata bijak|kata-kata bijak|kata mutiara|kata motivasi|quotes?\b|kata yang bikin sadar|kata yang nyadarin|fakta kehidupan|fakta hidup|fakta yang bikin sadar|kata renungan|self reminder|pengingat diri/.test(t)) return 'quote';
   if (/jodoh|cocok|serasi|pasangan|pacaran|soulmate|jadian/.test(t)) return 'jodoh';
   if (/lebih ganteng|lebih cantik|lebih lucu|lebih gemes|siapa yang lebih/.test(t)) return 'compare';
   if (/ganteng|cakep|good looking|keren/.test(t)) return 'ganteng';
