@@ -149,6 +149,12 @@ module.exports = {
       context += contextHelper.buildFlirtContext(content, guildId, userId);
     }
 
+    
+    // 3b. QUOTE / KATA BIJAK CONTEXT
+    if (intent === 'quote') {
+      context += contextHelper.buildQuoteContext(content);
+    }
+
     // 4. ROAST CONTEXT
     if (options.roast) {
       context += `\n============================================================\nROAST MODE\n============================================================\nLANGSUNG ROAST. Jangan bertanya. Jangan meminta bahan. Cari kebiasaan, gaya bicara, kalimat user, kontradiksi antara ucapan dan sikapnya. Manfaatkan data USER PERSONALITY CONTEXT di atas (kata yang sering dipakai, skor rough/playful/affectionate/flirty) sebagai bahan, jangan cuma andalkan status Discord/aktivitas — itu cuma satu opsi dari banyak, jangan dipakai berulang-ulang di roast yang beruntun. Buat SATU punchline paling tajam — jangan gabungin banyak lelucon lembek. Serang insecurity yang kelihatan dari chatnya. Akhiri di titik paling nyelekit, JANGAN ditutup nada manis/flirty/minta maaf — itu bikin roast kerasa dibungkus bubble wrap. Kalau user bales marah, itu artinya kena, lanjut roast makin dalam pakai reaksinya sebagai bahan baru, jangan mengalah.\n`;
