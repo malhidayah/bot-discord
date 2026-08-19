@@ -12,10 +12,81 @@ const { searchGif } = require('./giphySearch');
 const lastImageSubject = new Map();
 const IMAGE_SUBJECT_TTL = 10 * 60 * 1000; // 10 menit
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Berapa lama sebuah provider di-skip otomatis setelah gagal dengan cara
+// tertentu, biar tiap chat baru nggak nyoba-nyoba ulang provider yang
+// jelas-jelas lagi bermasalah (buang waktu response + spam log).
+const COOLDOWN_MS = {
+  payment: 6 * 60 * 60 * 1000, // 402 -> butuh isi billing manual, nggak akan pulih sendiri
+  configError: 60 * 60 * 1000, // 404/400 -> kemungkinan nama model/env salah, butuh dicek manusia
+  rateLimitDefault: 60 * 1000, // 429 tanpa info retry-after yang jelas
+};
+// Kalau provider kena rate limit dan waktu tunggunya pendek, mending nunggu
+// sebentar lalu retry di provider yang sama daripada langsung lempar ke
+// provider berikutnya (yang mungkin kualitasnya beda / juga limit).
+const RATE_LIMIT_INLINE_RETRY_MAX_MS = 10 * 1000;
+
+const providerCooldowns = new Map(); // providerName -> timestamp sampai kapan di-skip
+
+function isOnCooldown(name) {
+  const until = providerCooldowns.get(name);
+  return Boolean(until && Date.now() < until);
+}
+
+function setCooldown(name, ms) {
+  providerCooldowns.set(name, Date.now() + ms);
+}
+
+// Kalau OpenRouter bilang model default udah nggak gratis, kita simpen model
+// pengganti di sini biar request-request SELANJUTNYA langsung pakai model
+// itu duluan, nggak perlu kena 404 dulu tiap kali.
+let openRouterModelOverride = null;
+
+// Cache daftar model :free OpenRouter (yang beneran $0, dicek dari API-nya
+// sendiri) biar nggak fetch ulang tiap kali ada 404.
+let freeModelCache = { list: [], ts: 0 };
+const FREE_MODEL_CACHE_TTL = 60 * 60 * 1000; // 1 jam
+
+async function getOpenRouterFreeModels() {
+  if (freeModelCache.list.length && Date.now() - freeModelCache.ts < FREE_MODEL_CACHE_TTL) {
+    return freeModelCache.list;
+  }
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/models');
+    if (!res.ok) return freeModelCache.list;
+    const data = await res.json();
+    const list = (data?.data || [])
+      .filter((m) => typeof m.id === 'string' && m.id.endsWith(':free'))
+      .filter((m) => Number(m.pricing?.prompt || 0) === 0 && Number(m.pricing?.completion || 0) === 0)
+      // Buang model non-chat (embedding/tts/asr/dll) yang nggak nyambung sama chat.completions
+      .filter((m) => !/embed|rerank|tts|asr|whisper|stt|moderation/i.test(m.id))
+      .map((m) => m.id);
+    freeModelCache = { list, ts: Date.now() };
+    return list;
+  } catch (err) {
+    console.error('[AI] Gagal ambil daftar model gratis OpenRouter:', err.message);
+    return freeModelCache.list;
+  }
+}
+
+// Ambil pesan/kode error dari response, format tiap provider agak beda
+// (ada yang nested di "error", ada yang rata di root).
+function extractRetryMs(body) {
+  const msg = body?.error?.message || body?.message || '';
+  const match = msg.match(/try again in ([\d.]+)s/i);
+  if (!match) return null;
+  return Math.ceil(parseFloat(match[1]) * 1000) + 500; // + buffer 0.5s
+}
+
 // Semua provider di bawah pakai format Chat Completions yang kompatibel
 // OpenAI, jadi cuma beda base URL, cara kirim API key, dan nama model.
-// Urutan array ini = urutan coba: Groq dulu (utama), kalau gagal/limit
-// habis baru lempar ke provider berikutnya yang ENV-nya sudah diisi.
+// Urutan array ini = urutan coba: Groq -> Google AI Studio -> OpenRouter ->
+// NVIDIA NIM -> Cerebras. Semuanya gratis tanpa kartu debit/kredit KECUALI
+// Cerebras, yang sekarang minta billing (lihat error 402 di log) — makanya
+// ditaruh paling akhir, cuma dicoba kalau semua yang lain gagal/cooldown.
+// Provider cuma masuk chain kalau env key-nya diisi; kalau nggak mau pakai
+// salah satunya, tinggal jangan isi/hapus env var-nya.
 function getProviderChain() {
   const providers = [];
 
@@ -29,13 +100,36 @@ function getProviderChain() {
     });
   }
 
+  // Google AI Studio (Gemini) — gratis tanpa kartu, tinggal login akun Google.
+  // Lewat lapisan kompatibilitas OpenAI-nya jadi bisa dipakai format yang sama.
+  if (process.env.GOOGLE_AI_API_KEY) {
+    providers.push({
+      name: 'Google AI Studio',
+      endpoint: (process.env.GOOGLE_AI_API_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai').replace(/\/+$/, ''),
+      model: process.env.GOOGLE_AI_MODEL || 'gemini-2.5-flash',
+      key: process.env.GOOGLE_AI_API_KEY,
+      authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
+    });
+  }
+
   if (process.env.OPENROUTER_API_KEY) {
     providers.push({
       name: 'OpenRouter',
       endpoint: (process.env.OPENROUTER_API_ENDPOINT || 'https://openrouter.ai/api/v1').replace(/\/+$/, ''),
-      model: process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free',
-      model: process.env.OPENROUTER_MODEL || 'poolside/laguna-s-2.1:free',
+      model: openRouterModelOverride || process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free',
       key: process.env.OPENROUTER_API_KEY,
+      authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
+    });
+  }
+
+  // NVIDIA NIM — daftar di build.nvidia.com, gratis tanpa kartu, key diawali "nvapi-".
+  // Cek model yang mau dipakai punya "Free Endpoint" di katalognya sebelum dipasang.
+  if (process.env.NVIDIA_NIM_API_KEY) {
+    providers.push({
+      name: 'NVIDIA NIM',
+      endpoint: (process.env.NVIDIA_NIM_API_ENDPOINT || 'https://integrate.api.nvidia.com/v1').replace(/\/+$/, ''),
+      model: process.env.NVIDIA_NIM_MODEL || 'meta/llama-3.3-70b-instruct',
+      key: process.env.NVIDIA_NIM_API_KEY,
       authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
     });
   }
@@ -44,7 +138,7 @@ function getProviderChain() {
     providers.push({
       name: 'Cerebras',
       endpoint: (process.env.CEREBRAS_API_ENDPOINT || 'https://api.cerebras.ai/v1').replace(/\/+$/, ''),
-            model: process.env.CEREBRAS_MODEL || 'gpt-oss-120b',
+      model: process.env.CEREBRAS_MODEL || 'gpt-oss-120b',
       key: process.env.CEREBRAS_API_KEY,
       authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
     });
@@ -82,11 +176,56 @@ async function callProvider(provider, messages) {
       signal: controller.signal,
     });
 
-    if (!response.ok) throw new Error(`${provider.name} ${response.status}: ${await response.text()}`);
+    if (!response.ok) {
+      const text = await response.text();
+      let body = null;
+      try { body = JSON.parse(text); } catch { /* balasan bukan JSON, biarin body null */ }
+
+      const err = new Error(`${provider.name} ${response.status}: ${text}`);
+      err.status = response.status;
+      err.body = body;
+      throw err;
+    }
+
     const data = await response.json();
     return data?.choices?.[0]?.message?.content?.trim() || '';
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+// Bungkus callProvider dengan retry yang "worth it" — dicoba inline (dalam
+// request yang sama) daripada langsung nyerah ke provider berikutnya.
+async function callProviderWithRetry(provider, messages) {
+  try {
+    return await callProvider(provider, messages);
+  } catch (err) {
+    // Rate limit sebentar -> nunggu lalu retry sekali di provider yang sama.
+    if (err.status === 429) {
+      const waitMs = extractRetryMs(err.body);
+      if (waitMs && waitMs <= RATE_LIMIT_INLINE_RETRY_MAX_MS) {
+        console.warn(`[AI] ${provider.name} kena rate limit, nunggu ${(waitMs / 1000).toFixed(1)}s lalu retry sekali.`);
+        await sleep(waitMs);
+        return await callProvider(provider, messages);
+      }
+    }
+
+    // OpenRouter bilang model default udah nggak gratis -> cari model :free
+    // lain yang beneran $0 (dicek dari API-nya sendiri, bukan tebak-tebakan)
+    // dan retry sekali. Kalau berhasil, simpen jadi default buat request
+    // selanjutnya biar nggak 404 lagi tiap chat.
+    if (provider.name === 'OpenRouter' && err.status === 404) {
+      const freeModels = await getOpenRouterFreeModels();
+      const fallbackModel = freeModels.find((id) => id !== provider.model);
+      if (fallbackModel) {
+        console.warn(`[AI] Model OpenRouter "${provider.model}" kayaknya udah nggak gratis, nyoba model gratis lain: ${fallbackModel}`);
+        const result = await callProvider({ ...provider, model: fallbackModel }, messages);
+        openRouterModelOverride = fallbackModel;
+        return result;
+      }
+    }
+
+    throw err;
   }
 }
 
@@ -108,13 +247,33 @@ async function askAI({ channelId, userId, prompt, context }) {
   const providers = getProviderChain();
   let lastError;
 
-  for (const provider of providers) {
+  for (let i = 0; i < providers.length; i++) {
+    const provider = providers[i];
+    const isLastOption = i === providers.length - 1;
+
+    // Skip provider yang lagi cooldown (kecuali dia satu-satunya opsi yang
+    // tersisa -- lebih baik tetap dicoba & dapet error asli daripada nggak
+    // dicoba sama sekali).
+    if (isOnCooldown(provider.name) && !isLastOption) {
+      console.warn(`[AI] ${provider.name} lagi cooldown (billing/limit/config bermasalah), skip ke provider berikutnya.`);
+      continue;
+    }
+
     try {
-      return await callProvider(provider, messages);
+      return await callProviderWithRetry(provider, messages);
     } catch (err) {
       lastError = err;
       console.error(`[AI] ${provider.name} gagal, coba provider berikutnya kalau ada:`, err.message);
-      // Lanjut ke provider berikutnya di chain (biasanya karena rate limit/429 atau downtime)
+
+      if (err.status === 402) {
+        console.warn(`[AI] ${provider.name} butuh isi billing/kuota. Di-skip sementara ${COOLDOWN_MS.payment / 60000} menit biar nggak buang waktu tiap chat.`);
+        setCooldown(provider.name, COOLDOWN_MS.payment);
+      } else if (err.status === 429) {
+        const waitMs = extractRetryMs(err.body) || COOLDOWN_MS.rateLimitDefault;
+        setCooldown(provider.name, waitMs);
+      } else if (err.status === 404 || err.status === 400) {
+        setCooldown(provider.name, COOLDOWN_MS.configError);
+      }
     }
   }
 
