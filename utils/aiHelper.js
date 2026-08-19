@@ -43,7 +43,7 @@ function getProviderChain() {
     providers.push({
       name: 'Cerebras',
       endpoint: (process.env.CEREBRAS_API_ENDPOINT || 'https://api.cerebras.ai/v1').replace(/\/+$/, ''),
-      model: process.env.CEREBRAS_MODEL || 'llama-3.3-70b',
+            model: process.env.CEREBRAS_MODEL || 'gpt-oss-120b',
       key: process.env.CEREBRAS_API_KEY,
       authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
     });
