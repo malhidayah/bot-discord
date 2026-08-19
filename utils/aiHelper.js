@@ -12,18 +12,19 @@ const { searchGif } = require('./giphySearch');
 const lastImageSubject = new Map();
 const IMAGE_SUBJECT_TTL = 10 * 60 * 1000; // 10 menit
 
-function getAzureConfig() {
-  const endpoint = (process.env.AZURE_OPENAI_ENDPOINT || '').replace(/\/+$/, '');
-  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
-  const key = process.env.AZURE_OPENAI_KEY;
-  const apiVersion = process.env.AZURE_OPENAI_API_VERSION || '2024-10-21';
-  if (!endpoint || !deployment || !key) throw new Error('Azure OpenAI belum dikonfigurasi.');
-  return { endpoint, deployment, key, apiVersion };
+// Groq pakai format API yang kompatibel dengan OpenAI (Chat Completions),
+// jadi endpoint & body-nya mirip, cuma beda base URL, header auth, dan nama model.
+function getGroqConfig() {
+  const endpoint = (process.env.GROQ_API_ENDPOINT || 'https://api.groq.com/openai/v1').replace(/\/+$/, '');
+  const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+  const key = process.env.GROQ_API_KEY;
+  if (!key) throw new Error('Groq belum dikonfigurasi. Set GROQ_API_KEY di .env.');
+  return { endpoint, model, key };
 }
 
 async function askAI({ channelId, userId, prompt, context }) {
-  const { endpoint, deployment, key, apiVersion } = getAzureConfig();
-  const url = `${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=${encodeURIComponent(apiVersion)}`;
+  const { endpoint, model, key } = getGroqConfig();
+  const url = `${endpoint}/chat/completions`;
 
   const history = memoryHelper.getConversation(channelId, userId);
   const messages = [{ role: 'system', content: SYSTEM_PROMPT }];
@@ -45,8 +46,12 @@ async function askAI({ channelId, userId, prompt, context }) {
   try {
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'api-key': key },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${key}`,
+      },
       body: JSON.stringify({
+        model,
         messages,
         max_tokens: config.aiMaxTokens,
         temperature: config.temperature,
@@ -57,7 +62,7 @@ async function askAI({ channelId, userId, prompt, context }) {
       signal: controller.signal,
     });
 
-    if (!response.ok) throw new Error(`Azure ${response.status}: ${await response.text()}`);
+    if (!response.ok) throw new Error(`Groq ${response.status}: ${await response.text()}`);
     const data = await response.json();
     return data?.choices?.[0]?.message?.content?.trim() || '';
   } finally {
