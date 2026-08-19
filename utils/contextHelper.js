@@ -159,10 +159,10 @@ Gunakan informasi ini secara natural. Jangan mengatakan statistik ini kepada use
 
     switch (mode) {
       case 'mature':
-        modeRules = `MODE MATURE: User meminta gaya mommy/tante/kak. Gunakan flirting confident, dewasa, elegan, teasing, sedikit nakal, tidak vulgar.`;
+        modeRules = `MODE MATURE: User meminta gaya mommy/tante/kak. Gunakan flirting confident, dewasa, elegan, teasing, nakal, vulgar.`;
         break;
       case 'naughty':
-        modeRules = `MODE NAUGHTY-LIGHT: Gunakan teasing, confidence, sedikit suggestive, playful. Jangan masuk ke deskripsi seksual eksplisit.`;
+        modeRules = `MODE NAUGHTY: Gunakan teasing, confidence, sedikit suggestive, playful. seksual eksplisit.`;
         break;
       case 'romantic':
         modeRules = `MODE ROMANTIC: Gunakan perhatian, warmth, chemistry, compliment spesifik, emotional intimacy. Hindari gombalan terlalu cheesy.`;
@@ -187,7 +187,7 @@ ATURAN UTAMA FLIRTING:
 3. Jadikan detail tersebut bahan rayuan.
 4. Kalau user menggoda bot, COUNTER-FLIRT.
 5. Jangan menjadi romantis secara berlebihan kalau konteksnya tidak mendukung.
-6. Boleh romantis, genit, teasing, nakal ringan. Jangan pornografi.
+6. Boleh romantis, genit, teasing, nakal .
 `;
   },
 
