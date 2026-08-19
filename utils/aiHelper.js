@@ -23,7 +23,7 @@ function getProviderChain() {
     providers.push({
       name: 'Groq',
       endpoint: (process.env.GROQ_API_ENDPOINT || 'https://api.groq.com/openai/v1').replace(/\/+$/, ''),
-      model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+      model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
       key: process.env.GROQ_API_KEY,
       authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
     });
