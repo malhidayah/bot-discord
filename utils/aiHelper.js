@@ -33,7 +33,8 @@ function getProviderChain() {
     providers.push({
       name: 'OpenRouter',
       endpoint: (process.env.OPENROUTER_API_ENDPOINT || 'https://openrouter.ai/api/v1').replace(/\/+$/, ''),
-      model: process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',
+      model: process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free',
+      model: process.env.OPENROUTER_MODEL || 'poolside/laguna-s-2.1:free',
       key: process.env.OPENROUTER_API_KEY,
       authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
     });
