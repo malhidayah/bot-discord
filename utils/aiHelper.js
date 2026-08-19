@@ -12,20 +12,84 @@ const { searchGif } = require('./giphySearch');
 const lastImageSubject = new Map();
 const IMAGE_SUBJECT_TTL = 10 * 60 * 1000; // 10 menit
 
-// Groq pakai format API yang kompatibel dengan OpenAI (Chat Completions),
-// jadi endpoint & body-nya mirip, cuma beda base URL, header auth, dan nama model.
-function getGroqConfig() {
-  const endpoint = (process.env.GROQ_API_ENDPOINT || 'https://api.groq.com/openai/v1').replace(/\/+$/, '');
-  const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
-  const key = process.env.GROQ_API_KEY;
-  if (!key) throw new Error('Groq belum dikonfigurasi. Set GROQ_API_KEY di .env.');
-  return { endpoint, model, key };
+// Semua provider di bawah pakai format Chat Completions yang kompatibel
+// OpenAI, jadi cuma beda base URL, cara kirim API key, dan nama model.
+// Urutan array ini = urutan coba: Groq dulu (utama), kalau gagal/limit
+// habis baru lempar ke provider berikutnya yang ENV-nya sudah diisi.
+function getProviderChain() {
+  const providers = [];
+
+  if (process.env.GROQ_API_KEY) {
+    providers.push({
+      name: 'Groq',
+      endpoint: (process.env.GROQ_API_ENDPOINT || 'https://api.groq.com/openai/v1').replace(/\/+$/, ''),
+      model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+      key: process.env.GROQ_API_KEY,
+      authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
+    });
+  }
+
+  if (process.env.OPENROUTER_API_KEY) {
+    providers.push({
+      name: 'OpenRouter',
+      endpoint: (process.env.OPENROUTER_API_ENDPOINT || 'https://openrouter.ai/api/v1').replace(/\/+$/, ''),
+      model: process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',
+      key: process.env.OPENROUTER_API_KEY,
+      authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
+    });
+  }
+
+  if (process.env.CEREBRAS_API_KEY) {
+    providers.push({
+      name: 'Cerebras',
+      endpoint: (process.env.CEREBRAS_API_ENDPOINT || 'https://api.cerebras.ai/v1').replace(/\/+$/, ''),
+      model: process.env.CEREBRAS_MODEL || 'llama-3.3-70b',
+      key: process.env.CEREBRAS_API_KEY,
+      authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
+    });
+  }
+
+  if (!providers.length) {
+    throw new Error('Belum ada provider AI yang dikonfigurasi. Set minimal GROQ_API_KEY di .env.');
+  }
+
+  return providers;
+}
+
+async function callProvider(provider, messages) {
+  const url = `${provider.endpoint}/chat/completions`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.aiTimeout);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...provider.authHeader(provider.key),
+      },
+      body: JSON.stringify({
+        model: provider.model,
+        messages,
+        max_tokens: config.aiMaxTokens,
+        temperature: config.temperature,
+        top_p: config.topP,
+        frequency_penalty: 0.65,
+        presence_penalty: 0.3,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) throw new Error(`${provider.name} ${response.status}: ${await response.text()}`);
+    const data = await response.json();
+    return data?.choices?.[0]?.message?.content?.trim() || '';
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function askAI({ channelId, userId, prompt, context }) {
-  const { endpoint, model, key } = getGroqConfig();
-  const url = `${endpoint}/chat/completions`;
-
   const history = memoryHelper.getConversation(channelId, userId);
   const messages = [{ role: 'system', content: SYSTEM_PROMPT }];
 
@@ -40,34 +104,20 @@ async function askAI({ channelId, userId, prompt, context }) {
 
   messages.push({ role: 'user', content: prompt });
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.aiTimeout);
+  const providers = getProviderChain();
+  let lastError;
 
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        max_tokens: config.aiMaxTokens,
-        temperature: config.temperature,
-        top_p: config.topP,
-        frequency_penalty: 0.65,
-        presence_penalty: 0.3,
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) throw new Error(`Groq ${response.status}: ${await response.text()}`);
-    const data = await response.json();
-    return data?.choices?.[0]?.message?.content?.trim() || '';
-  } finally {
-    clearTimeout(timeout);
+  for (const provider of providers) {
+    try {
+      return await callProvider(provider, messages);
+    } catch (err) {
+      lastError = err;
+      console.error(`[AI] ${provider.name} gagal, coba provider berikutnya kalau ada:`, err.message);
+      // Lanjut ke provider berikutnya di chain (biasanya karena rate limit/429 atau downtime)
+    }
   }
+
+  throw lastError;
 }
 
 module.exports = {
