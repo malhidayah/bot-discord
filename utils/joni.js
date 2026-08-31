@@ -23,10 +23,10 @@ function pickTarget(message) {
 
 const TIERS = [
   { min: 30, label: "Raksasa 🗿", color: 0xe74c3c },
-  { min: 20, label: "Besar 🖐️", color: 0xe67e22 },
-  { min: 10, label: "Sedang 🖐️", color: 0x2ecc71 },
+  { min: 20, label: "Besar 🍆", color: 0xe67e22 },
+  { min: 10, label: "Sedang 🍌", color: 0x2ecc71 },
   { min: 5, label: "Kecil 🤏", color: 0x3498db },
-  { min: 0, label: "Mini 🐣", color: 0x95a5a6 },
+  { min: 0, label: "Mini 🌶", color: 0x95a5a6 },
 ];
 
 function buildEmbed(user) {
