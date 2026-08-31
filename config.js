@@ -89,7 +89,7 @@ module.exports = {
     "wowo|prabowo|wo": "prabowo",
     "takut|takut banget|serem": "takut banget",
     "jomok|gay": "jomok",
-    "mole|login": "https://media.giphy.com/media/1mhPcNgITnbEnCIaR0/giphy.gif",
+    "mole|login": ["https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOHBsYTgwYmU5Y2FjMTI5ZDM3Nm5pdmVrejdyMmQ1YjAzNWF1Yml1YSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/1mhPcNgITnbEnCIaR0/giphy.gif"],
 
     // Contoh pakai URL langsung tanpa API key (hapus komentar & isi linknya):
     // "halo|hai": ["https://media.tenor.com/xxxxxxxxxx/hi.gif"],
