@@ -1,0 +1,17 @@
+{
+  "name": "discord-friendly-bot",
+  "version": "3.0.0",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.4.1",
+    "@discordjs/voice": "0.18.0",
+    "libsodium-wrappers": "^0.7.15"
+  }
+}
