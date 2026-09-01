@@ -5,7 +5,7 @@ const chatContext = require("./chatContext");
 // JANGAN pernah taruh key-nya langsung di sini.
 const ai = new GoogleGenAI({});
 
-const MODEL = "gemini-3.6-flash";
+const MODEL = "gemini-3.5-flash-lite";
 
 const PERSONA = `
 Kamu adalah bot Discord yang nongkrong bareng anak-anak di server ini, BUKAN asisten AI formal.
