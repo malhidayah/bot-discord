@@ -6,6 +6,8 @@ const voiceKeeper = require("../utils/voiceKeeper");
 const jodoh = require("../utils/jodoh");
 const customCommands = require("../utils/customCommands");
 const Joni = require("../utils/joni");
+const chatContext = require("../utils/chatContext");
+const aiChat = require("../utils/aiChat");
 
 const lastInteraction = new Map(); // stateKey -> timestamp, buat cooldown sapaan
 
@@ -225,6 +227,11 @@ module.exports = async (message) => {
   const channelId = message.channel.id;
   const userId = message.author.id;
   const stateKey = `${channelId}:${userId}`;
+  const displayName = message.member?.displayName || message.author.username;
+
+  // Rekam SEMUA pesan (bukan cuma yang manggil bot) ke context per-channel,
+  // supaya AI "tau" lagi rame ngobrolin apa di channel ini kalau nanti dipanggil.
+  chatContext.record(channelId, displayName, content);
 
   // COMMAND PREFIX
   // Command HANYA dianggap valid kalau kata sesudah prefix memang nama
@@ -277,6 +284,25 @@ module.exports = async (message) => {
   lastInteraction.set(stateKey, Date.now());
 
   const normalized = textHelper.normalize(content).replace(/~+/g, "");
-  const reply = SMALL_TALK[normalized] || textHelper.random(["Iya, ada apa?", "Iya, kenapa?", "Ada yang bisa gue bantu?"]);
-  await message.reply(reply);
+
+  // Sapaan pendek doang (wo, bro, dst) -> balasan kilat, TANPA manggil AI (hemat token).
+  if (SMALL_TALK[normalized]) {
+    return message.reply(textHelper.random(SMALL_TALK[normalized]));
+  }
+
+  // Dipanggil dengan isi pesan beneran -> baru lempar ke AI, pakai konteks chat terakhir.
+  try {
+    const aiReply = await aiChat.reply({
+      channelId,
+      username: displayName,
+      message: content,
+    });
+    if (aiReply) {
+      return message.reply(textHelper.truncate(aiReply, 1900));
+    }
+  } catch (err) {
+    console.error("[AI CHAT ERROR]", err);
+  }
+
+  return message.reply(textHelper.random(["Hmm, gue lagi bingung nih.", "Coba tanya lagi deh, tadi gak nangkep."]));
 };
