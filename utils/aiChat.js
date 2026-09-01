@@ -1,5 +1,6 @@
 const { GoogleGenAI } = require("@google/genai");
 const chatContext = require("./chatContext");
+const { replyFallback } = require("./aiFallback");
 
 // Otomatis baca API key dari environment variable GEMINI_API_KEY.
 // JANGAN pernah taruh key-nya langsung di sini.
@@ -37,17 +38,49 @@ async function reply({ channelId, username, message }) {
     .filter(Boolean)
     .join("\n\n");
 
-  const response = await ai.models.generateContent({
-    model: MODEL,
-    contents: prompt,
-    config: {
-      systemInstruction: PERSONA,
-      maxOutputTokens: 150, // batasin panjang balasan biar hemat token & gak yapping
-      temperature: 0.9,
-    },
-  });
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL,
+      contents: prompt,
+      config: {
+        systemInstruction: PERSONA,
+        maxOutputTokens: 150, // batasin panjang balasan biar hemat token & gak yapping
+        temperature: 0.9,
+      },
+    });
 
-  return response.text?.trim() || null;
+    const text = response.text?.trim();
+    if (text) return text;
+
+    // kalau Gemini balikin response kosong (bukan error), tetep coba fallback
+    console.warn("[aiChat] Gemini balikin response kosong, fallback ke HF...");
+    return await tryFallback(prompt);
+  } catch (err) {
+    if (isRateLimitError(err)) {
+      console.warn("[aiChat] Gemini kena limit, fallback ke HF...");
+    } else {
+      console.error("[aiChat] error Gemini:", err.message);
+    }
+    return await tryFallback(prompt);
+  }
+}
+
+async function tryFallback(prompt) {
+  try {
+    return await replyFallback(PERSONA, prompt);
+  } catch (fallbackErr) {
+    console.error("[aiChat] fallback HF juga gagal:", fallbackErr.message);
+    return null;
+  }
+}
+
+function isRateLimitError(err) {
+  // Gemini API biasanya balikin status 429 atau kode RESOURCE_EXHAUSTED
+  return (
+    err?.status === 429 ||
+    err?.code === 429 ||
+    /RESOURCE_EXHAUSTED|rate.?limit|quota/i.test(err?.message || "")
+  );
 }
 
 module.exports = { reply };
