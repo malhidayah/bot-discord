@@ -1,15 +1,23 @@
 const { EmbedBuilder } = require("discord.js");
-const config = require("../config");
 const { random } = require("./textHelper");
+
+const TIERS = [
+  { min: 95, color: 0xff1493, text: "💍 Ini udah bukan jodoh lagi, ini takdir. Nikah aja sekalian!" },
+  { min: 85, color: 0xff69b4, text: "💘 Cocok parah, kayak dibuat khusus buat satu sama lain." },
+  { min: 70, color: 0xff8fab, text: "❤️ Chemistry-nya kerasa banget nih, coba deket-deketin lagi." },
+  { min: 55, color: 0xffb6c1, text: "🌸 Lumayan cocok, tinggal usaha dikit lagi." },
+  { min: 40, color: 0xffd1dc, text: "🙂 Standar aja sih, temenan dulu juga gapapa." },
+  { min: 25, color: 0xd3d3d3, text: "😅 Agak maksa, tapi masih ada harapan tipis." },
+  { min: 10, color: 0xa9a9a9, text: "💀 Jauh banget bro, mending temenan aja selamanya." },
+  { min: 0, color: 0x696969, text: "🪦 Nol besar, ini udah beda semesta kayaknya." },
+];
 
 /**
  * Tentukan 2 user yang mau diuji jodohnya:
  * - 2+ mention        -> pakai 2 user pertama yang di-mention
  * - 1 mention / reply -> user itu dipasangkan dengan 1 user random lain
- *                        dari histori chat channel ini (BUKAN otomatis
- *                        sama pengirim command)
+ *                        dari histori chat channel ini
  * - selain itu        -> 2 user random dari histori chat channel ini
- *                        (tidak butuh Server Members Intent yang privileged)
  */
 async function pickPair(message) {
   const mentioned = [...message.mentions.users.values()].filter((u) => !u.bot);
@@ -32,7 +40,7 @@ async function pickPair(message) {
   pool.set(message.author.id, message.author);
 
   if (target) {
-    pool.delete(target.id); // jangan sampai dipasangin sama dirinya sendiri
+    pool.delete(target.id);
     const candidates = [...pool.values()];
     if (!candidates.length) return null;
     return [target, random(candidates)];
@@ -42,22 +50,24 @@ async function pickPair(message) {
   if (users.length < 2) return null;
 
   const a = random(users);
-  let b = random(users);
-  let guard = 0;
-  while (b.id === a.id && guard++ < 10) b = random(users);
-  if (b.id === a.id) return null;
+  const remaining = users.filter((u) => u.id !== a.id);
+  if (!remaining.length) return null;
+  const b = random(remaining);
+
   return [a, b];
 }
 
 function buildEmbed(userA, userB) {
   const percent = Math.floor(Math.random() * 101);
-  const tier = config.MATCH_TIERS.find((t) => percent >= t.min) || config.MATCH_TIERS[config.MATCH_TIERS.length - 1];
+  const tier = TIERS.find((t) => percent >= t.min) || TIERS[TIERS.length - 1];
   const filled = Math.round(percent / 10);
   const bar = "█".repeat(filled) + "░".repeat(10 - filled);
 
   return new EmbedBuilder()
     .setTitle("💘 Tes Jodoh")
-    .setDescription(`**${userA.username}** ❤️ **${userB.username}**\n\n\`${bar}\` **${percent}%**\n\n${tier.text}`)
+    .setDescription(
+      `**${userA.username}** ❤️ **${userB.username}**\n\n\`${bar}\` **${percent}%**\n\n${tier.text}`
+    )
     .setColor(tier.color)
     .setThumbnail(userA.displayAvatarURL({ size: 256 }))
     .setImage(userB.displayAvatarURL({ size: 256 }));
