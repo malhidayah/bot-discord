@@ -86,7 +86,7 @@ module.exports = {
     "nyerah|give up|udah gak kuat|nggak sanggup": "give up anime",
     "semangat|fighting|ganbatte": "cheer up anime",
     "pamer|flexing": "show off anime",
-    "wowo|prabowo|wo": "prabowo",
+    "wowo|prabowo": "prabowo",
     "takut|takut banget|serem": "takut banget",
     "jomok|gay": "jomok",
     "mole|login": ["https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOHBsYTgwYmU5Y2FjMTI5ZDM3Nm5pdmVrejdyMmQ1YjAzNWF1Yml1YSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/1mhPcNgITnbEnCIaR0/giphy.gif"],
