@@ -74,7 +74,7 @@ module.exports = {
     "kejar|kejar kejaran": "anime chase",
 
     // --- gaul & interaksi lainnya ---
-    "bini gua|bini guweh|bini gw|calon bini": "my bini",
+    "my bini|bini guweh|bini gw|calon bini": "my bini",
     "suami gua|suami guweh|suami gw": "my suami",
     "apakah ini my|my kisah|kisah": "my kisah",
     "gebetan|crush|pdkt": "anime shy blush",
