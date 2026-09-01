@@ -12,6 +12,7 @@
     "discord.js": "^14.14.1",
     "dotenv": "^16.4.1",
     "@discordjs/voice": "0.18.0",
-    "libsodium-wrappers": "^0.7.15"
+    "libsodium-wrappers": "^0.7.15",
+    "@google/genai": "^2.20.0"
   }
 }
